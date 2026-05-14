@@ -10,6 +10,7 @@ export const users = sqliteTable('users', {
   emailAlerts: integer('email_alerts', { mode: 'boolean' }).notNull().default(true),
   smsAlerts: integer('sms_alerts', { mode: 'boolean' }).notNull().default(false),
   pushAlerts: integer('push_alerts', { mode: 'boolean' }).notNull().default(false),
+  phoneNumber: text('phone_number'),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 });
 

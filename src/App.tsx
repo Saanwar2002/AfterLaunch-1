@@ -1,41 +1,79 @@
 import React from "react";
 import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { Activity, Bell, Settings, Plus, LogOut, ArrowLeft, AlertCircle, CheckCircle2, FileText, Trash2, Play, Pause, MoreHorizontal, Search } from "lucide-react";
+import { Activity, Bell, Settings, Plus, LogOut, ArrowLeft, AlertCircle, CheckCircle2, FileText, Trash2, Play, Pause, MoreHorizontal, Search, RefreshCw, User } from "lucide-react";
 import { useEffect, useState, useMemo, useRef } from "react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { Capacitor } from '@capacitor/core';
 import { PushNotifications } from '@capacitor/push-notifications';
 import { AppProvider, useAppContext } from "./lib/AppContext";
+import { AuthProvider, useAuth } from "./lib/AuthContext";
+import { Login } from "./components/auth/Login";
+import { Signup } from "./components/auth/Signup";
+import { ForgotPassword } from "./components/auth/ForgotPassword";
+import { auth } from "./lib/firebase";
+import { sendEmailVerification } from "firebase/auth";
+import { motion } from "motion/react";
 
 export default function App() {
   return (
-    <AppProvider>
-      <BrowserRouter>
-        <AppLayout />
-      </BrowserRouter>
-    </AppProvider>
+    <AuthProvider>
+      <AppProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/signup" element={<Signup />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/*" element={<ProtectedRoute><AppLayout /></ProtectedRoute>} />
+          </Routes>
+        </BrowserRouter>
+      </AppProvider>
+    </AuthProvider>
   );
+}
+
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      navigate('/login', { state: { from: location } });
+    }
+  }, [user, loading, navigate, location]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#09090b] flex items-center justify-center">
+        <Activity className="h-8 w-8 text-emerald-500 animate-spin" />
+      </div>
+    );
+  }
+
+  return user ? <>{children}</> : null;
 }
 
 function AppLayout() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const isActive = (path: string) => {
     if (path === '/') return location.pathname === '/' || location.pathname.startsWith('/app/');
     return location.pathname === path;
   };
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [addError, setAddError] = useState("");
   const { selectedAppName, setSelectedAppId, setSelectedAppName } = useAppContext();
-  const [user, setUser] = useState<any>(null);
+  const [userSettings, setUserSettings] = useState<any>(null);
 
   const fetchUser = async () => {
     try {
       const res = await fetch('/api/user/settings');
       if (res.ok) {
         const data = await res.json();
-        setUser(data);
+        setUserSettings(data);
       }
     } catch (e) {
       console.error(e);
@@ -66,6 +104,25 @@ function AppLayout() {
 
   return (
     <div className="flex h-screen bg-[#09090b] text-neutral-100 font-sans flex-col md:flex-row relative">
+      {user && !user.emailVerified && (
+        <div className="absolute top-0 left-0 right-0 bg-amber-500/10 border-b border-amber-500/20 px-4 py-2 flex items-center justify-center gap-3 z-[100] backdrop-blur-sm">
+          <AlertCircle className="h-4 w-4 text-amber-500" />
+          <p className="text-[11px] font-bold text-amber-500 uppercase tracking-widest">Please verify your email address to enable all features.</p>
+          <button 
+            onClick={async () => {
+              try {
+                await sendEmailVerification(user);
+                alert("Verification email sent!");
+              } catch (e: any) {
+                alert(e.message);
+              }
+            }}
+            className="text-[10px] font-black text-amber-500 border border-amber-500/30 px-2 py-0.5 rounded hover:bg-amber-500 hover:text-black transition-all"
+          >
+            Resend Email
+          </button>
+        </div>
+      )}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-3xl h-[400px] bg-emerald-900/10 blur-[120px] rounded-full pointer-events-none auto-pulse" />
       {/* Sidebar for Desktop */}
       <aside className="w-64 border-r border-white/10 bg-[#09090b]/80 backdrop-blur-md p-6 flex flex-col hidden md:flex relative z-20">
@@ -80,11 +137,12 @@ function AppLayout() {
             </div>
           </div>
           <div className="flex items-center gap-2 mt-2">
-            <div className={`h-2 w-2 rounded-full ${user?.plan === 'free' ? 'bg-neutral-500' : 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]'}`}></div>
-            <span className={`text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border ${user?.plan === 'free' ? 'text-neutral-500 bg-neutral-500/10 border-neutral-500/20' : 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20'}`}>
-              {user?.plan ? `${user.plan.toUpperCase()} Plan` : 'Loading...'}
+            <div className={`h-2 w-2 rounded-full ${userSettings?.plan === 'free' ? 'bg-neutral-500' : 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]'}`}></div>
+            <span className={`text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border ${userSettings?.plan === 'free' ? 'text-neutral-500 bg-neutral-500/10 border-neutral-500/20' : 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20'}`}>
+              {userSettings?.plan ? `${userSettings.plan.toUpperCase()} Plan` : 'Loading...'}
             </span>
           </div>
+          <div className="text-neutral-500 text-[10px] truncate mt-2 font-medium opacity-80 uppercase tracking-wider">{user?.email}</div>
           {selectedAppName && (
             <div className="text-neutral-400 text-sm mt-3 truncate border-l-2 border-emerald-500/30 pl-3">
               {selectedAppName}
@@ -112,7 +170,10 @@ function AppLayout() {
         </nav>
 
         <div className="pt-4 border-t border-white/10">
-           <button className="flex items-center gap-3 px-3 py-2 text-neutral-500 hover:text-neutral-300 w-full text-left rounded-md transition-colors">
+           <button 
+            onClick={() => setShowSignOutConfirm(true)}
+            className="flex items-center gap-3 px-3 py-2 text-neutral-500 hover:text-neutral-300 w-full text-left rounded-md transition-colors"
+          >
             <LogOut className="h-5 w-5" />
             Sign Out
           </button>
@@ -146,7 +207,7 @@ function AppLayout() {
             <Route path="/app/:id" element={<AppDetail />} />
             <Route path="/incidents" element={<IncidentsView />} />
             <Route path="/logs" element={<LogsView />} />
-            <Route path="/settings" element={<SettingsView />} />
+            <Route path="/settings" element={<SettingsView onSignOut={() => setShowSignOutConfirm(true)} />} />
           </Routes>
         </div>
       </main>
@@ -266,6 +327,44 @@ function AppLayout() {
           <span className="text-[10px] font-medium">Settings</span>
         </Link>
       </nav>
+
+      {/* Sign Out Confirmation Modal */}
+      {showSignOutConfirm && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="bg-neutral-900 border border-white/10 rounded-2xl p-8 max-w-sm w-full shadow-2xl relative overflow-hidden"
+          >
+            <div className="absolute top-0 left-0 w-full h-1 bg-red-500" />
+            <div className="flex flex-col items-center text-center">
+              <div className="h-16 w-16 rounded-full bg-red-500/10 flex items-center justify-center mb-6 border border-red-500/20">
+                <LogOut className="h-8 w-8 text-red-500" />
+              </div>
+              <h3 className="text-xl font-bold text-white mb-2 uppercase tracking-tight">Sign Out?</h3>
+              <p className="text-neutral-500 text-sm mb-8">Are you sure you want to log out of your dashboard? You'll need to sign back in to monitor your services.</p>
+              
+              <div className="grid grid-cols-2 gap-4 w-full">
+                <button 
+                  onClick={() => setShowSignOutConfirm(false)}
+                  className="px-4 py-3 bg-neutral-800 hover:bg-neutral-700 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={() => {
+                    setShowSignOutConfirm(false);
+                    auth.signOut();
+                  }}
+                  className="px-4 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all shadow-lg shadow-red-600/20"
+                >
+                  Sign Out
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }
@@ -276,6 +375,7 @@ function DashboardOverview({ onAddClick }: { onAddClick: () => void }) {
   const [apps, setApps] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [filterStatus, setFilterStatus] = useState<"all" | "online" | "offline" | "paused">("all");
 
   const [openSettingsId, setOpenSettingsId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -283,23 +383,33 @@ function DashboardOverview({ onAddClick }: { onAddClick: () => void }) {
   const pausedAppsCount = useMemo(() => apps.filter(app => !app.isActive).length, [apps]);
 
   const filteredApps = useMemo(() => {
-    let result = searchQuery 
-      ? apps.filter(app => 
-          app.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-          app.url.toLowerCase().includes(searchQuery.toLowerCase())
-        )
-      : [...apps];
+    let result = apps;
 
-    // Priority: Paused first, then by name
-    return result.sort((a, b) => {
-      // isActive is true for active, false for paused. 
-      // We want false (paused) to come first.
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter(app =>
+        app.name.toLowerCase().includes(query) ||
+        app.url.toLowerCase().includes(query)
+      );
+    }
+
+    if (filterStatus !== "all") {
+      result = result.filter(app => {
+        if (filterStatus === "paused") return !app.isActive;
+        if (filterStatus === "online") return app.isActive && app.lastCheck?.isUp;
+        if (filterStatus === "offline") return app.isActive && app.lastCheck?.isUp === false;
+        return true;
+      });
+    }
+
+    // Sort: Paused first, then by name
+    return [...result].sort((a, b) => {
       if (a.isActive === b.isActive) {
         return a.name.localeCompare(b.name);
       }
       return a.isActive ? 1 : -1;
     });
-  }, [apps, searchQuery]);
+  }, [apps, searchQuery, filterStatus]);
 
   const fetchApps = async () => {
     try {
@@ -317,8 +427,8 @@ function DashboardOverview({ onAddClick }: { onAddClick: () => void }) {
     }
   };
 
-  const toggleMonitoring = async (appId: string, currentStatus: boolean, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const toggleMonitoring = async (appId: string, currentStatus: boolean, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
     try {
       const res = await fetch(`/api/apps/${appId}`, {
         method: 'PATCH',
@@ -331,6 +441,27 @@ function DashboardOverview({ onAddClick }: { onAddClick: () => void }) {
       }
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const bulkAction = async (action: 'pause' | 'resume') => {
+    const activeApps = apps.filter(a => action === 'pause' ? a.isActive : !a.isActive);
+    if (activeApps.length === 0) return;
+    
+    setLoading(true);
+    try {
+      await Promise.all(activeApps.map(app => 
+        fetch(`/api/apps/${app.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ isActive: action === 'resume' })
+        })
+      ));
+      fetchApps();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -424,15 +555,45 @@ function DashboardOverview({ onAddClick }: { onAddClick: () => void }) {
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto">
-      <div className="flex justify-between items-center mb-2">
-        <h2 className="text-2xl font-semibold text-white tracking-tight">System Status</h2>
-        <button 
-          onClick={onAddClick}
-          className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg justify-center text-sm font-medium transition-colors shadow-[0_0_15px_rgba(16,185,129,0.3)]"
-        >
-          <Plus className="h-4 w-4" />
-          <span>Add App</span>
-        </button>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-2">
+        <div className="flex items-center gap-4">
+          <h2 className="text-2xl font-semibold text-white tracking-tight">System Status</h2>
+          <button 
+            onClick={() => { fetchApps(); setLoading(true); }}
+            className={`p-2 rounded-lg border border-white/10 bg-[#18181b] text-neutral-400 hover:text-white hover:bg-neutral-800 transition-all active:scale-95 ${loading ? 'animate-spin' : ''}`}
+            title="Refresh monitors"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          {apps.length > 0 && (
+            <div className="hidden lg:flex items-center p-1 bg-neutral-900 border border-white/10 rounded-xl">
+              <button 
+                onClick={() => bulkAction('pause')}
+                className="flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold text-neutral-400 hover:text-white transition-colors uppercase tracking-wider"
+              >
+                <Pause className="h-3 w-3" />
+                Pause All
+              </button>
+              <div className="w-px h-3 bg-white/10"></div>
+              <button 
+                onClick={() => bulkAction('resume')}
+                className="flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold text-neutral-400 hover:text-white transition-colors uppercase tracking-wider"
+              >
+                <Play className="h-3 w-3" />
+                Resume All
+              </button>
+            </div>
+          )}
+          <button 
+            onClick={onAddClick}
+            className="flex-1 sm:flex-none flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg justify-center text-sm font-medium transition-colors shadow-[0_0_15px_rgba(16,185,129,0.3)]"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Add App</span>
+          </button>
+        </div>
       </div>
 
       {/* Overall Health Widget */}
@@ -447,7 +608,11 @@ function DashboardOverview({ onAddClick }: { onAddClick: () => void }) {
                 <Activity className="h-5 w-5 text-black" />
               </div>
               <div className={`text-xl font-black tracking-tighter leading-none text-left ${overallHealth.status.includes('Operational') ? 'text-emerald-400' : overallHealth.status === 'Degraded' ? 'text-amber-400' : 'text-red-400'}`}>
-                All Systems<br />Operational
+                {overallHealth.status.split(' ').map((word, i) => (
+                  <React.Fragment key={i}>
+                    {word}{i === 1 ? <br /> : ' '}
+                  </React.Fragment>
+                ))}
               </div>
             </div>
 
@@ -465,7 +630,7 @@ function DashboardOverview({ onAddClick }: { onAddClick: () => void }) {
                  <span className="text-[7px] text-neutral-500 uppercase font-bold tracking-widest mt-1">Incidents</span>
                </div>
                <div className="flex flex-col items-center p-2.5 rounded-xl bg-neutral-900/40 border border-white/10">
-                 <span className="text-2xl font-black text-emerald-400 tabular-nums tracking-tighter leading-none">5m</span>
+                 <span className="text-2xl font-black text-emerald-400 tabular-nums tracking-tighter leading-none">1m</span>
                  <span className="text-[7px] text-neutral-500 uppercase font-bold tracking-widest mt-1">Check Rate</span>
                </div>
             </div>
@@ -498,7 +663,29 @@ function DashboardOverview({ onAddClick }: { onAddClick: () => void }) {
       {apps.length > 0 && (
         <div className="space-y-4">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <h3 className="text-lg font-medium text-neutral-200 tracking-tight shrink-0">Active Monitors</h3>
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0 scrollbar-hide">
+              {[
+                { id: 'all', label: 'All', count: apps.length },
+                { id: 'online', label: 'Online', count: apps.filter(a => a.isActive && a.lastCheck?.isUp).length },
+                { id: 'offline', label: 'Offline', count: apps.filter(a => a.isActive && a.lastCheck?.isUp === false).length },
+                { id: 'paused', label: 'Paused', count: pausedAppsCount }
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setFilterStatus(tab.id as any)}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all whitespace-nowrap border ${
+                    filterStatus === tab.id 
+                      ? 'bg-white text-black border-white' 
+                      : 'bg-neutral-900 text-neutral-500 border-white/5 hover:border-white/20'
+                  }`}
+                >
+                  {tab.label}
+                  <span className={`px-1.5 py-0.5 rounded-md text-[8px] ${filterStatus === tab.id ? 'bg-black/10 text-black' : 'bg-white/5 text-neutral-500'}`}>
+                    {tab.count}
+                  </span>
+                </button>
+              ))}
+            </div>
             <div className="relative flex-1 max-w-sm">
               {pausedAppsCount > 0 && (
                 <div className="absolute -top-12 right-0 animate-in slide-in-from-top-2 fade-in duration-700 z-10">
@@ -579,8 +766,21 @@ function DashboardOverview({ onAddClick }: { onAddClick: () => void }) {
                        )}
                     </div>
                     
-                    <div className={`font-semibold ${isPaused ? 'text-neutral-500' : 'text-neutral-100'} mb-0.5 pr-8 truncate text-base transition-colors leading-tight`}>
-                      {app.name} 
+                    <div className="flex items-center gap-3 mb-2">
+                       <div className="h-9 w-9 rounded-xl bg-neutral-900 border border-white/10 flex items-center justify-center shrink-0 overflow-hidden relative">
+                         <img 
+                           src={`https://www.google.com/s2/favicons?sz=64&domain=${new URL(app.url.startsWith('http') ? app.url : `https://${app.url}`).hostname}`} 
+                           alt="" 
+                           className={`w-5 h-5 opacity-80 z-10 ${isPaused ? 'grayscale opacity-40' : ''}`}
+                           onError={(e) => {
+                             (e.target as HTMLImageElement).style.display = 'none';
+                           }}
+                         />
+                         <Activity className={`h-4 w-4 absolute inset-0 m-auto ${isPaused ? 'text-neutral-800' : 'text-neutral-700'}`} />
+                       </div>
+                       <div className={`font-semibold ${isPaused ? 'text-neutral-500' : 'text-neutral-100'} truncate text-base transition-colors leading-tight flex-1 pr-6`}>
+                         {app.name} 
+                       </div>
                     </div>
                     <div className="text-[10px] text-neutral-500 truncate mb-3 pb-2 border-b border-white/10 flex items-center gap-2">
                       <span className="truncate">{app.url}</span>
@@ -1392,11 +1592,12 @@ function LogsView() {
   );
 }
 
-function SettingsView() {
+function SettingsView({ onSignOut }: { onSignOut: () => void }) {
   const [user, setUser] = useState<any>(null);
   const [emailAlerts, setEmailAlerts] = useState(true);
   const [pushAlerts, setPushAlerts] = useState(false);
   const [smsAlerts, setSmsAlerts] = useState(false);
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [intervalOption, setIntervalOption] = useState("5");
   const [isDirty, setIsDirty] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -1411,6 +1612,7 @@ function SettingsView() {
         setEmailAlerts(data.emailAlerts);
         setPushAlerts(data.pushAlerts);
         setSmsAlerts(data.smsAlerts);
+        setPhoneNumber(data.phoneNumber || "");
       }
     } catch (e) {
       console.error(e);
@@ -1434,7 +1636,7 @@ function SettingsView() {
       const res = await fetch('/api/user/settings', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ emailAlerts, smsAlerts, pushAlerts })
+        body: JSON.stringify({ emailAlerts, smsAlerts, pushAlerts, phoneNumber })
       });
       if (res.ok) {
         setIsDirty(false);
@@ -1473,7 +1675,36 @@ function SettingsView() {
 
   return (
      <div className="space-y-6 max-w-2xl px-2 md:px-0">
-       <h2 className="text-xl font-medium text-white tracking-tight">Settings</h2>
+       <div className="flex justify-between items-center">
+         <h2 className="text-xl font-medium text-white tracking-tight">Settings</h2>
+         <button 
+           onClick={onSignOut}
+           className="md:hidden flex items-center gap-2 px-3 py-1.5 bg-red-500/10 text-red-500 border border-red-500/20 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all"
+         >
+           <LogOut className="h-3 w-3" />
+           Sign Out
+         </button>
+       </div>
+
+       {/* Account Section */}
+       <div className="bg-neutral-900 border border-white/10 rounded-xl p-6 mb-6">
+         <div className="flex items-center gap-4 mb-6">
+            <div className="h-12 w-12 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-500">
+              <User className="h-6 w-6" />
+            </div>
+            <div>
+              <h3 className="text-white font-medium text-base leading-none mb-1">{auth.currentUser?.email}</h3>
+              <p className="text-neutral-500 text-[10px] font-bold uppercase tracking-widest">Active Account</p>
+            </div>
+            <button 
+              onClick={onSignOut}
+              className="ml-auto hidden md:flex items-center gap-2 px-4 py-2 bg-neutral-950 border border-white/10 rounded-xl text-neutral-400 hover:text-white hover:bg-neutral-800 transition-all text-xs font-bold uppercase tracking-widest"
+            >
+              <LogOut className="h-4 w-4" />
+              Sign Out
+            </button>
+         </div>
+       </div>
 
        {success && (
          <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 p-4 rounded-xl mb-6">
@@ -1632,6 +1863,22 @@ function SettingsView() {
                  </div>
                </label>
 
+               {canUseSms && smsAlerts && (
+                 <div className="pl-8 space-y-3">
+                   <div>
+                     <label className="block text-neutral-400 text-[10px] uppercase font-bold tracking-widest mb-1.5">Phone Number</label>
+                     <input 
+                       type="tel" 
+                       value={phoneNumber}
+                       onChange={(e) => { setPhoneNumber(e.target.value); setIsDirty(true); }}
+                       placeholder="+44 7123 456789"
+                       className="bg-neutral-950 border border-white/10 rounded-lg px-3 py-2 text-white text-xs outline-none focus:border-emerald-500 w-full max-w-sm transition-colors"
+                     />
+                     <p className="text-[10px] text-neutral-500 mt-1.5 italic">Formatting: Include country code (e.g. +44 for UK)</p>
+                   </div>
+                 </div>
+               )}
+
                <div className="space-y-4">
                  <label className={`flex items-center gap-3 group ${!canUsePush ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
                    <input 
@@ -1653,6 +1900,39 @@ function SettingsView() {
                      <span className="text-neutral-500 text-xs">Receive native push alerts on your desktop or mobile device.</span>
                    </div>
                  </label>
+
+
+               {canUseSms && smsAlerts && (
+                 <div className="pl-8 space-y-3">
+                   <div>
+                     <label className="block text-neutral-400 text-[10px] uppercase font-bold tracking-widest mb-1.5">Phone Number</label>
+                     <input 
+                       type="tel" 
+                       value={phoneNumber}
+                       onChange={(e) => { setPhoneNumber(e.target.value); setIsDirty(true); }}
+                       placeholder="+44 7123 456789"
+                       className="bg-neutral-950 border border-white/10 rounded-lg px-3 py-2 text-white text-xs outline-none focus:border-emerald-500 w-full max-w-sm transition-colors"
+                     />
+                     <p className="text-[10px] text-neutral-500 mt-1.5 italic">Formatting: Include country code (e.g. +44 for UK)</p>
+                   </div>
+                 </div>
+               )}
+
+               {canUseSms && smsAlerts && (
+                 <div className="pl-8 space-y-3">
+                   <div>
+                     <label className="block text-neutral-400 text-[10px] uppercase font-bold tracking-widest mb-1.5">Phone Number</label>
+                     <input 
+                       type="tel" 
+                       value={phoneNumber}
+                       onChange={(e) => { setPhoneNumber(e.target.value); setIsDirty(true); }}
+                       placeholder="+44 7123 456789"
+                       className="bg-neutral-950 border border-white/10 rounded-lg px-3 py-2 text-white text-xs outline-none focus:border-emerald-500 w-full max-w-sm transition-colors"
+                     />
+                     <p className="text-[10px] text-neutral-500 mt-1.5 italic">Formatting: Include country code (e.g. +44 for UK)</p>
+                   </div>
+                 </div>
+               )}
 
                  {canUsePush && pushAlerts && (
                    <div className="pl-8 space-y-3">

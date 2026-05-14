@@ -248,7 +248,7 @@ async function startServer() {
 
   app.patch("/api/user/settings", async (req, res) => {
     try {
-      const { emailAlerts, smsAlerts, pushAlerts } = req.body;
+      const { emailAlerts, smsAlerts, pushAlerts, phoneNumber } = req.body;
       const users = await db.select().from(schema.users);
       if (users.length === 0) return res.status(404).json({ error: "User not found" });
       
@@ -256,7 +256,8 @@ async function startServer() {
         .set({ 
           emailAlerts: emailAlerts !== undefined ? emailAlerts : undefined, 
           smsAlerts: smsAlerts !== undefined ? smsAlerts : undefined, 
-          pushAlerts: pushAlerts !== undefined ? pushAlerts : undefined 
+          pushAlerts: pushAlerts !== undefined ? pushAlerts : undefined,
+          phoneNumber: phoneNumber !== undefined ? phoneNumber : undefined
         })
         .where(eq(schema.users.id, users[0].id));
         
