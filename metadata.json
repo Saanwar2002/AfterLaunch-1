@@ -1,0 +1,8 @@
+{
+  "name": "AFTERLAUNCH - App Monitor",
+  "description": "Continuous monitoring and maintenance dashboard for vibe-coded and AI-built applications.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

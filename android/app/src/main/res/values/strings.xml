@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">AFTERLAUNCH</string>
+    <string name="title_activity_main">AFTERLAUNCH</string>
+    <string name="package_name">com.afterlaunch.app</string>
+    <string name="custom_url_scheme">com.afterlaunch.app</string>
+</resources>
